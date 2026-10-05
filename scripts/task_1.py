@@ -139,4 +139,4 @@ full_dataset.to_csv(csv_filename, index=False)
 print(f"Generated {len(full_dataset)} points across {num_trajectories} runs.")
 print(
     f"Runs reaching cutoff: {full_dataset.groupby('run_id')['is_runaway'].max().sum()} / {num_trajectories}"
-)
+)   
