@@ -2,6 +2,10 @@
 
 This repository models a thermal runaway risk problem in an exothermic continuous stirred-tank reactor (CSTR) and frames it as a predictive maintenance and remaining-safe-time estimation task. The workflow spans synthetic data generation, time-series forecasting with an LSTM, and safety-oriented prognosis evaluation.
 
+## Live demo
+
+Try the [CSTR Thermal Runaway Inference app](https://umid5-cstr-thermal-runaway-inference.static.hf.space/index.html). It runs an interactive CSTR simulation in the browser, with stable and upset scenarios and an LSTM estimate of remaining time to cutoff. Simulation data stays in the browser. The model is trained on synthetic data and is for benchmarking only; never use its output to operate or make safety decisions for a real reactor.
+
 ## Project objective
 
 The reactor is governed by an Arrhenius reaction term and a thermal energy balance. Under normal operation, the system remains stable, but a set of upset scenarios such as coolant pump failure, loss of jacket cooling, feed surge, and overheating can drive the temperature toward a runaway threshold. The project aims to:
@@ -145,7 +149,7 @@ The `plots/` directory contains exploratory visuals such as:
 Install dependencies with:
 
 ```bash
-pip install numpy pandas matplotlib scipy seaborn scikit-learn torch
+pip install -r requirements.txt
 ```
 
 Run the scripts in this order, keeping the CSV in the same working directory as the code expects:
