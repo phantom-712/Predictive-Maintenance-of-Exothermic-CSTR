@@ -3,14 +3,16 @@ import torch.nn as nn
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from pathlib import Path
 from sklearn.preprocessing import StandardScaler
 
 # ==========================================
 # 1. Configuration & Model Definition
 # ==========================================
-# Updated paths for Colab environment
-CSV_FILE = "/content/cstr_runaway_trajectories.csv"
-MODEL_PATH = "/content/cstr_lstm_model.pth"
+# Resolve paths relative to this file so the script works outside Colab.
+SCRIPT_DIR = Path(__file__).resolve().parent
+CSV_FILE = SCRIPT_DIR / "cstr_runaway_trajectories.csv"
+MODEL_PATH = SCRIPT_DIR / "cstr_lstm_model.pth"
 WINDOW_SIZE = 15
 FEATURE_COLS = ["q", "cAi", "Ti", "Tc", "cA", "T", "dT_dt"]
 TARGET_COL = "time_to_cutoff"

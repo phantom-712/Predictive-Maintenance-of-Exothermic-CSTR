@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CSTR Thermal Runaway Explorer</title>
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.min.js"></script>
+  <style>
+    :root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #eaf0f8; background: #0b1018; }
+    * { box-sizing: border-box; } body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 12% -5%, #1d4552 0, transparent 33rem), radial-gradient(circle at 88% 5%, #552820 0, transparent 28rem), #0b1018; }
+    main { max-width: 1180px; margin: 0 auto; padding: 2.5rem 1rem 3rem; } .eyebrow { color: #71e0d2; font-size: .78rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+    h1 { font-size: clamp(2rem, 5vw, 3.6rem); letter-spacing: -.06em; line-height: .95; margin: .45rem 0 1rem; max-width: 760px; } h1 em { color: #ff996f; font-style: normal; }
+    .subtitle { color: #b9c8d9; line-height: 1.6; max-width: 720px; } .notice { margin-top: 1rem; padding: .8rem 1rem; background: #312720b8; color: #f7d5c7; border: 1px solid #754b3d; border-radius: 10px; font-size: .88rem; }
+    .card { background: #121b27d9; border: 1px solid #2b3a4e; border-radius: 16px; box-shadow: 0 20px 45px #0004; } .section-title { margin: 0; font-size: 1rem; letter-spacing: .01em; }
+    .presets { margin: 1.5rem 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: .75rem; } .preset { appearance: none; text-align: left; color: #eaf0f8; padding: 1rem; cursor: pointer; background: #151f2c; border: 1px solid #304158; border-radius: 12px; transition: .2s ease; } .preset:hover, .preset.active { border-color: #71e0d2; background: #17313a; transform: translateY(-1px); } .preset strong, .preset small { display: block; } .preset small { color: #aec0d1; line-height: 1.4; margin-top: .35rem; }
+    .dashboard { display: grid; grid-template-columns: minmax(245px, 310px) minmax(0, 1fr); gap: 1rem; } .controls { padding: 1.25rem; } .control { padding: 1rem 0; border-bottom: 1px solid #28384a; } .control:last-child { border-bottom: 0; padding-bottom: 0; } .control label { display: flex; justify-content: space-between; font-size: .92rem; font-weight: 700; } .control output { color: #71e0d2; font-variant-numeric: tabular-nums; } input[type=range] { width: 100%; accent-color: #71e0d2; margin-top: .7rem; } .range-labels { color: #8495a8; display: flex; justify-content: space-between; font-size: .7rem; margin-top: .15rem; }
+    .run-config { display: grid; gap: .75rem; margin-top: 1rem; } .run-config label { color: #b9c8d9; display: grid; font-size: .83rem; font-weight: 700; gap: .35rem; } select, input[type=number] { background: #0c141e; border: 1px solid #3a4e64; border-radius: 8px; color: #eaf0f8; font: inherit; padding: .55rem .6rem; width: 100%; }
+    .actions { display: grid; gap: .65rem; margin-top: 1.1rem; } .actions button { border: 1px solid #3f596c; border-radius: 9px; cursor: pointer; font-weight: 750; padding: .75rem .8rem; } #run-button { background: #71e0d2; color: #08211f; } #clear-button { background: #182534; color: #cfdae5; } #run-button:disabled { cursor: wait; opacity: .6; } .action-note { color: #8fa1b4; font-size: .74rem; line-height: 1.45; margin: 0; }
+    .visual { padding: 1.25rem; min-width: 0; } .topline { align-items: center; display: flex; justify-content: space-between; gap: 1rem; } #status { color: #a8bacd; font-size: .85rem; text-align: right; } #status.error { color: #ff9c89; }
+    .metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; margin: 1rem 0; } .metric { padding: .9rem; background: #0c141e; border: 1px solid #26384a; border-radius: 12px; } .metric span { color: #98a9ba; display: block; font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; } .metric strong { display: block; font-size: clamp(1.1rem, 2.5vw, 1.75rem); margin-top: .3rem; white-space: nowrap; } #risk { color: #71e0d2; } #risk.warning { color: #ffce74; } #risk.critical { color: #ff8b70; }
+    .chart-heading { align-items: baseline; display: flex; gap: .75rem; justify-content: space-between; margin: 1.25rem 0 .55rem; } .chart-heading h3 { font-size: .88rem; margin: 0; } .chart-heading span { color: #8495a8; font-size: .75rem; }
+    .chart-box { background: #0c141e; border: 1px solid #26384a; border-radius: 12px; padding: .5rem; } canvas { display: block; width: 100%; height: 320px; } #process-chart { height: 360px; }
+    .feature-legend { display: flex; flex-wrap: wrap; gap: .45rem .8rem; margin-bottom: .6rem; } .feature-legend span { align-items: center; color: #afbdcb; display: inline-flex; font-size: .73rem; gap: .3rem; } .feature-legend i { border-radius: 999px; display: inline-block; height: .55rem; width: .55rem; }
+    table { border-collapse: collapse; font-variant-numeric: tabular-nums; width: 100%; margin-top: 1rem; font-size: .85rem; } th, td { border-bottom: 1px solid #27384a; padding: .55rem .25rem; text-align: right; } th:first-child, td:first-child { text-align: left; } th { color: #90a3b7; font-weight: 600; }
+    footer { color: #8394a6; font-size: .78rem; margin-top: 1rem; } @media (max-width: 760px) { .dashboard { grid-template-columns: 1fr; } .metrics { grid-template-columns: 1fr 1fr; } .metrics .metric:last-child { grid-column: span 2; } #status { text-align: left; } .topline { align-items: flex-start; flex-direction: column; gap: .4rem; } }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="eyebrow">Interactive synthetic benchmark</div>
+    <h1>Explore CSTR <em>runaway risk</em> in real time.</h1>
+    <p class="subtitle">Choose base inputs, the Task 1 operating mode, and a duration. The graph then builds at 0.2-minute intervals while the CSTR balances and LSTM remaining-safe-time forecast are calculated.</p>
+    <div class="notice">For demonstration with synthetic data only. This interface is not a process simulator and must not be used for real-reactor operation or safety decisions.</div>
+    <section id="presets" class="presets" aria-label="Ready-to-run scenarios"></section>
+    <section class="dashboard">
+      <aside class="card controls"><h2 class="section-title">Operating inputs</h2>
+        <div class="control"><label for="q"><span>Flow rate, q</span><output id="q-value"></output></label><input id="q" type="range" min="80" max="115" step="0.1"><div class="range-labels"><span>80</span><span>115 L/min</span></div></div>
+        <div class="control"><label for="cAi"><span>Inlet concentration, cAi</span><output id="cAi-value"></output></label><input id="cAi" type="range" min="0.80" max="2.00" step="0.01"><div class="range-labels"><span>0.80</span><span>2.00 mol/L</span></div></div>
+        <div class="control"><label for="Ti"><span>Inlet temperature, Ti</span><output id="Ti-value"></output></label><input id="Ti" type="range" min="330" max="390" step="0.5"><div class="range-labels"><span>330</span><span>390 K</span></div></div>
+        <div class="control"><label for="Tc"><span>Coolant temperature, Tc</span><output id="Tc-value"></output></label><input id="Tc" type="range" min="270" max="350" step="0.5"><div class="range-labels"><span>270</span><span>350 K</span></div></div>
+        <div class="run-config">
+          <label for="scenario">Task 1 operating mode<select id="scenario"><option value="safe">Safe control — no upset</option><option value="random">Random Task 1 upset (75% chance)</option><option value="coolant_pump_failure">Coolant pump failure</option><option value="jacket_loss">Jacket loss</option><option value="feed_surge">Feed surge</option><option value="overheating">Overheating</option></select></label>
+          <label for="duration">Simulation duration (minutes)<input id="duration" type="number" min="1" max="120" step="1" value="40"></label>
+        </div>
+        <div class="actions"><button id="run-button" type="button">Run CSTR simulation</button><button id="clear-button" type="button">Clear graph</button><p class="action-note">The run starts at t = 0 using the selected preset’s initial state and cooling regime.</p></div>
+      </aside>
+      <section class="card visual"><div class="topline"><h2 class="section-title">Dynamic reactor profile</h2><div id="status" aria-live="polite">Preparing simulation…</div></div>
+        <div class="metrics"><div class="metric"><span>Latest reactor temperature</span><strong id="reactor-temperature">—</strong></div><div class="metric"><span>LSTM remaining-safe-time</span><strong id="remaining-time">—</strong></div><div class="metric"><span>Operating state</span><strong id="risk">—</strong></div></div>
+        <div class="chart-heading"><h3>All calculated parameter traces</h3><span>Normalized traces · white dashed = LSTM forecast (0–20 min)</span></div>
+        <div id="feature-legend" class="feature-legend" aria-label="Model feature values"></div>
+        <div class="chart-box"><canvas id="process-chart" role="img" aria-label="All CSTR model feature traces versus trajectory time"></canvas></div>
+        <table><thead><tr><th>Time (min)</th><th>cA (mol/L)</th><th>Reactor T (K)</th><th>dT/dt (K/min)</th><th>LSTM remaining time (min)</th></tr></thead><tbody id="rows"></tbody></table>
+        <footer>Every process trace follows the Task 1 CSTR kinetic, mass-balance, energy-balance and upset logic. The LSTM forecasts remaining time to cutoff once 15 simulated points are available.</footer>
+      </section>
+    </section>
+  </main>
+  <script>
+    const controls = ["q", "cAi", "Ti", "Tc"];
+    const requiredFeatures = ["q", "cAi", "Ti", "Tc", "cA", "T", "dT_dt"];
+    let profiles, activeProfile, scaler, modelSession, simulationState, simulationRecords = [], safeTimeForecasts = [], runSequence = 0, isRunning = false;
+    const status = document.querySelector("#status");
+    const runButton = document.querySelector("#run-button");
+    const scenarioInput = document.querySelector("#scenario");
+    const durationInput = document.querySelector("#duration");
+    const physics = { volume: 100, k0: 7.2e10, eOverR: 8750, heatRelease: 50, rhoCp: 1000, cutoff: 380, step: .2, integrationStep: .01, uaNominal: 50_000 };
+    const taskOneScenarios = ["coolant_pump_failure", "jacket_loss", "feed_surge", "overheating"];
+    const featureMeta = [
+      { key: "q", label: "q · flow", color: "#65dce0", low: 80, high: 115, decimals: 1, unit: "L/min" },
+      { key: "cAi", label: "cAi · inlet concentration", color: "#f9ce6b", low: .8, high: 2, decimals: 2, unit: "mol/L" },
+      { key: "Ti", label: "Ti · inlet temperature", color: "#ff976b", low: 330, high: 390, decimals: 1, unit: "K" },
+      { key: "Tc", label: "Tc · coolant temperature", color: "#b599ff", low: 270, high: 350, decimals: 1, unit: "K" },
+      { key: "cA", label: "cA · concentration", color: "#84d989", low: 0, high: 1.2, decimals: 3, unit: "mol/L" },
+      { key: "T", label: "T · reactor temperature", color: "#ff6e93", low: 330, high: 410, decimals: 1, unit: "K" },
+      { key: "dT_dt", label: "dT/dt · heat-up rate", color: "#65a8ff", low: -10, high: 120, decimals: 2, unit: "K/min" },
+    ];
+    function setStatus(message, isError = false) { status.textContent = message; status.className = isError ? "error" : ""; }
+    function setControlValues(defaults) { controls.forEach(name => { const input = document.querySelector(`#${name}`); input.value = defaults[name]; document.querySelector(`#${name}-value`).textContent = `${Number(input.value).toFixed(name === "cAi" ? 2 : 1)}${name === "q" ? " L/min" : name === "cAi" ? " mol/L" : " K"}`; }); }
+    function renderPresets() { const holder = document.querySelector("#presets"); holder.innerHTML = profiles.map(profile => `<button class="preset ${profile.id === activeProfile.id ? "active" : ""}" data-id="${profile.id}"><strong>${profile.title}</strong><small>${profile.description}</small></button>`).join(""); holder.querySelectorAll("button").forEach(button => button.addEventListener("click", () => { activeProfile = profiles.find(profile => profile.id === button.dataset.id); setControlValues(activeProfile.defaults); scenarioInput.value = activeProfile.default_scenario; renderPresets(); clearSimulation("Preset selected. Adjust inputs and duration, then run the simulation."); })); }
+    function currentInputs() {
+      return Object.fromEntries(controls.map(name => [name, Number(document.querySelector(`#${name}`).value)]));
+    }
+
+    function cstrRhs(cA, temperature, inputs, coolingUA) {
+      const safeCA = Math.max(cA, 1e-7);
+      const safeTemperature = Math.max(temperature, 150);
+      const reactionRate = physics.k0 * Math.exp(-physics.eOverR / safeTemperature) * safeCA;
+      return {
+        dcA: (inputs.q / physics.volume) * (inputs.cAi - safeCA) - reactionRate,
+        dT: (inputs.q / physics.volume) * (inputs.Ti - safeTemperature)
+          + physics.heatRelease * reactionRate
+          - (coolingUA / (physics.volume * physics.rhoCp)) * (safeTemperature - inputs.Tc),
+      };
+    }
+
+    function advanceState(cA, temperature, inputs, coolingUA) {
+      let nextCA = cA;
+      let nextT = temperature;
+      const substeps = Math.round(physics.step / physics.integrationStep);
+      for (let substep = 0; substep < substeps; substep += 1) {
+        const h = physics.integrationStep;
+        const k1 = cstrRhs(nextCA, nextT, inputs, coolingUA);
+        const k2 = cstrRhs(nextCA + .5 * h * k1.dcA, nextT + .5 * h * k1.dT, inputs, coolingUA);
+        const k3 = cstrRhs(nextCA + .5 * h * k2.dcA, nextT + .5 * h * k2.dT, inputs, coolingUA);
+        const k4 = cstrRhs(nextCA + h * k3.dcA, nextT + h * k3.dT, inputs, coolingUA);
+        nextCA = Math.max(1e-7, nextCA + (h / 6) * (k1.dcA + 2 * k2.dcA + 2 * k3.dcA + k4.dcA));
+        nextT = Math.max(150, nextT + (h / 6) * (k1.dT + 2 * k2.dT + 2 * k3.dT + k4.dT));
+      }
+      return { cA: nextCA, T: nextT };
+    }
+
+    function phaseFor(time, state) {
+      const inputs = { ...state.baseInputs };
+      let coolingUA = physics.uaNominal;
+      if (!state.isUpset || time < state.upsetTime) return { inputs, coolingUA };
+      if (state.scenario === "coolant_pump_failure") coolingUA = physics.uaNominal * (0.02 + Math.random() * 0.06);
+      if (state.scenario === "jacket_loss") { coolingUA = physics.uaNominal * .1; inputs.Tc = state.baseInputs.Tc + 35; }
+      if (state.scenario === "feed_surge") { inputs.cAi = state.baseInputs.cAi * 1.6; coolingUA = physics.uaNominal * .3; }
+      if (state.scenario === "overheating") { inputs.Ti = state.baseInputs.Ti + 20; inputs.Tc = state.baseInputs.Tc + 25; }
+      return { inputs, coolingUA };
+    }
+
+    function createSimulationState() {
+      const duration = Number(durationInput.value);
+      if (!Number.isFinite(duration) || duration < physics.step || duration > 120) throw new Error("Enter a duration from 1 to 120 minutes.");
+      const requestedMode = scenarioInput.value;
+      const isUpset = requestedMode === "random" ? Math.random() > .25 : requestedMode !== "safe";
+      const scenario = requestedMode === "random" ? taskOneScenarios[Math.floor(Math.random() * taskOneScenarios.length)] : requestedMode;
+      return {
+        step: 0,
+        cA: activeProfile.initial_state.cA,
+        T: activeProfile.initial_state.T,
+        baseInputs: currentInputs(),
+        duration,
+        maxStepIndex: Math.max(0, Math.ceil(duration / physics.step) - 1),
+        isUpset,
+        scenario,
+        upsetTime: isUpset ? 4 + Math.random() * 6 : null,
+      };
+    }
+
+    async function inferRemainingSafeTime(records) {
+      if (records.length < scaler.window_size) return null;
+      const window = records.slice(-scaler.window_size);
+      const values = new Float32Array(scaler.window_size * requiredFeatures.length);
+      window.forEach((record, step) => requiredFeatures.forEach((feature, index) => {
+        values[step * requiredFeatures.length + index] = (Number(record[feature]) - scaler.mean[index]) / scaler.scale[index];
+      }));
+      const output = await modelSession.run({ features: new ort.Tensor("float32", values, [1, scaler.window_size, requiredFeatures.length]) });
+      return Math.max(0, Math.min(20, output.remaining_safe_time.data[0]));
+    }
+
+    function startSimulation() {
+      if (!modelSession || !activeProfile) return;
+      try {
+        runSequence += 1;
+        isRunning = true;
+        simulationRecords = [];
+        safeTimeForecasts = [];
+        simulationState = createSimulationState();
+        runButton.disabled = true;
+        runButton.textContent = "Simulation running…";
+        const plan = simulationState.isUpset
+          ? `${simulationState.scenario.replaceAll("_", " ")} at t = ${simulationState.upsetTime.toFixed(1)} min`
+          : "safe control with no upset";
+        setStatus(`Task 1 run: ${plan}. Starting at t = 0…`);
+        advanceSimulation(runSequence);
+      } catch (error) {
+        finishSimulation(`Unable to start: ${error.message}`, true);
+      }
+    }
+
+    async function advanceSimulation(sequence) {
+      if (!isRunning || sequence !== runSequence) return;
+      try {
+        const time = simulationState.step * physics.step;
+        const phase = phaseFor(time, simulationState);
+        const derivatives = cstrRhs(simulationState.cA, simulationState.T, phase.inputs, phase.coolingUA);
+        simulationRecords.push({ time, ...phase.inputs, cA: simulationState.cA, T: simulationState.T, dT_dt: derivatives.dT });
+        const forecast = await inferRemainingSafeTime(simulationRecords);
+        if (!isRunning || sequence !== runSequence) return;
+        safeTimeForecasts.push(forecast);
+        renderResults();
+
+        const latest = simulationRecords.at(-1);
+        if (latest.T >= physics.cutoff) {
+          finishSimulation(`Safety cutoff reached at t = ${latest.time.toFixed(1)} min.`);
+          return;
+        }
+        if (simulationState.step >= simulationState.maxStepIndex) {
+          finishSimulation(`Simulation completed through t = ${latest.time.toFixed(1)} min.`);
+          return;
+        }
+        const nextState = advanceState(simulationState.cA, simulationState.T, phase.inputs, phase.coolingUA);
+        simulationState.cA = nextState.cA;
+        simulationState.T = nextState.T;
+        simulationState.step += 1;
+        setStatus(`Simulating t = ${time.toFixed(1)} min…`);
+        setTimeout(() => advanceSimulation(sequence), 70);
+      } catch (error) {
+        finishSimulation(`Simulation failed: ${error.message}`, true);
+      }
+    }
+
+    function finishSimulation(message, isError = false) {
+      isRunning = false;
+      runButton.disabled = false;
+      runButton.textContent = "Run CSTR simulation";
+      setStatus(message, isError);
+    }
+
+    function clearSimulation(message = "Graph cleared. Choose inputs, then run the simulation.") {
+      runSequence += 1;
+      isRunning = false;
+      simulationRecords = [];
+      safeTimeForecasts = [];
+      simulationState = null;
+      runButton.disabled = false;
+      runButton.textContent = "Run CSTR simulation";
+      document.querySelector("#reactor-temperature").textContent = "—";
+      document.querySelector("#remaining-time").textContent = "—";
+      document.querySelector("#risk").textContent = "—";
+      document.querySelector("#risk").className = "";
+      document.querySelector("#feature-legend").innerHTML = "";
+      document.querySelector("#rows").innerHTML = "";
+      drawEmptyChart();
+      setStatus(message);
+    }
+
+    function renderResults() {
+      const latest = simulationRecords.at(-1);
+      const forecast = safeTimeForecasts.at(-1);
+      document.querySelector("#reactor-temperature").textContent = `${latest.T.toFixed(1)} K`;
+      document.querySelector("#remaining-time").textContent = forecast === null ? "Collecting history" : `${forecast.toFixed(2)} min`;
+
+      const risk = document.querySelector("#risk");
+      const riskInfo = latest.T >= physics.cutoff ? ["Cutoff exceeded", "critical"] : latest.T >= 370 ? ["Warning", "warning"] : ["Stable", ""];
+      risk.textContent = riskInfo[0];
+      risk.className = riskInfo[1];
+
+      drawProcessChart(simulationRecords, safeTimeForecasts);
+      renderFeatureLegend(latest, forecast);
+      document.querySelector("#rows").innerHTML = simulationRecords.slice(-8).map((record, index, rows) => {
+        const rowIndex = simulationRecords.length - rows.length + index;
+        const prediction = safeTimeForecasts[rowIndex];
+        return `<tr><td>${record.time.toFixed(2)}</td><td>${record.cA.toFixed(4)}</td><td>${record.T.toFixed(2)}</td><td>${record.dT_dt.toFixed(3)}</td><td>${prediction === null ? "—" : prediction.toFixed(3)}</td></tr>`;
+      }).join("");
+    }
+
+    function renderFeatureLegend(latestRecord, forecast) {
+      const featureItems = featureMeta.map(feature => {
+        const value = Number(latestRecord[feature.key]).toFixed(feature.decimals);
+        return `<span><i style="background:${feature.color}"></i>${feature.label}: ${value} ${feature.unit}</span>`;
+      });
+      featureItems.push(`<span><i style="background:#ffffff"></i>LSTM remaining safe time: ${forecast === null ? "collecting history" : `${forecast.toFixed(2)} min`}</span>`);
+      document.querySelector("#feature-legend").innerHTML = featureItems.join("");
+    }
+
+    function setupCanvas(selector) {
+      const canvas = document.querySelector(selector);
+      const box = canvas.getBoundingClientRect();
+      const scale = window.devicePixelRatio || 1;
+      canvas.width = box.width * scale;
+      canvas.height = box.height * scale;
+      const context = canvas.getContext("2d");
+      context.scale(scale, scale);
+      return { context, width: box.width, height: box.height };
+    }
+
+    function drawEmptyChart() {
+      const { context, width: w, height: h } = setupCanvas("#process-chart");
+      context.fillStyle = "#8ea1b5";
+      context.font = "600 15px system-ui";
+      context.textAlign = "center";
+      context.fillText("Choose inputs, then run the CSTR simulation", w / 2, h / 2 - 8);
+      context.font = "12px system-ui";
+      context.fillStyle = "#6f8194";
+      context.fillText("The graph will build in 0.2-minute intervals.", w / 2, h / 2 + 16);
+      context.textAlign = "left";
+    }
+
+    function drawProcessChart(records, forecasts) {
+      const { context, width: w, height: h } = setupCanvas("#process-chart");
+      const pad = { l: 43, r: 16, t: 18, b: 31 };
+      const times = records.map(record => Number(record.time));
+      const xMin = 0, xMax = simulationState.duration;
+      const x = value => pad.l + ((value - xMin) / (xMax - xMin || 1)) * (w - pad.l - pad.r);
+      const y = value => h - pad.b - value * (h - pad.t - pad.b);
+      context.font = "12px system-ui";
+      context.strokeStyle = "#283b50";
+      context.fillStyle = "#8ea1b5";
+      context.lineWidth = 1;
+      [0, .25, .5, .75, 1].forEach(tick => {
+        context.beginPath(); context.moveTo(pad.l, y(tick)); context.lineTo(w - pad.r, y(tick)); context.stroke();
+        context.fillText(`${Math.round(tick * 100)}%`, 7, y(tick) + 4);
+      });
+      context.fillText("normalized operating range", pad.l, 12);
+      featureMeta.forEach(feature => {
+        context.strokeStyle = feature.color;
+        context.lineWidth = 1.8;
+        context.beginPath();
+        records.forEach((record, index) => {
+          const raw = Number(record[feature.key]);
+          const normalized = Math.max(0, Math.min(1, (raw - feature.low) / (feature.high - feature.low)));
+          index ? context.lineTo(x(times[index]), y(normalized)) : context.moveTo(x(times[index]), y(normalized));
+        });
+        context.stroke();
+      });
+      context.strokeStyle = "#ffffff";
+      context.lineWidth = 2;
+      context.setLineDash([6, 4]);
+      context.beginPath();
+      let forecastStarted = false;
+      forecasts.forEach((forecast, index) => {
+        if (forecast === null) { forecastStarted = false; return; }
+        forecastStarted ? context.lineTo(x(times[index]), y(forecast / 20)) : context.moveTo(x(times[index]), y(forecast / 20));
+        forecastStarted = true;
+      });
+      context.stroke();
+      context.setLineDash([]);
+      context.fillStyle = "#8ea1b5";
+      context.fillText(`${xMin.toFixed(1)} min`, pad.l, h - 9);
+      context.fillText(`${xMax.toFixed(1)} min`, w - pad.r - 52, h - 9);
+    }
+    async function initialize() {
+      try {
+        runButton.disabled = true;
+        [profiles, scaler, modelSession] = await Promise.all([
+          fetch("default_profiles.json").then(response => {
+            if (!response.ok) throw new Error("Default scenarios could not be loaded.");
+            return response.json();
+          }),
+          fetch("scaler.json").then(response => {
+            if (!response.ok) throw new Error("Feature scaler could not be loaded.");
+            return response.json();
+          }),
+          ort.InferenceSession.create("model.onnx", { executionProviders: ["wasm"] }),
+        ]);
+        activeProfile = profiles[0];
+        setControlValues(activeProfile.defaults);
+        scenarioInput.value = activeProfile.default_scenario;
+        renderPresets();
+        controls.forEach(name => document.querySelector(`#${name}`).addEventListener("input", event => {
+          document.querySelector(`#${name}-value`).textContent = `${Number(event.target.value).toFixed(name === "cAi" ? 2 : 1)}${name === "q" ? " L/min" : name === "cAi" ? " mol/L" : " K"}`;
+          if (isRunning) clearSimulation("Inputs changed. The active simulation was stopped; press Run to restart.");
+          else setStatus("Inputs changed. Press Run CSTR simulation to calculate a new trajectory.");
+        }));
+        [scenarioInput, durationInput].forEach(input => input.addEventListener("change", () => {
+          if (isRunning) clearSimulation("Run settings changed. The active simulation was stopped; press Run to restart.");
+          else clearSimulation("Run settings changed. Press Run CSTR simulation to start a new Task 1-style run.");
+        }));
+        runButton.addEventListener("click", startSimulation);
+        document.querySelector("#clear-button").addEventListener("click", () => clearSimulation());
+        window.addEventListener("resize", () => simulationRecords.length ? drawProcessChart(simulationRecords, safeTimeForecasts) : drawEmptyChart());
+        clearSimulation("Ready. Choose inputs, then run the simulation.");
+      } catch (error) {
+        runButton.disabled = true;
+        setStatus(`Could not load the simulator: ${error.message}`, true);
+      }
+    }
+    initialize();
+  </script>
+</body>
+</html>
