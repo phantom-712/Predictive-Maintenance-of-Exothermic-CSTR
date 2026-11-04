@@ -16,6 +16,16 @@
     .dashboard { display: grid; grid-template-columns: minmax(245px, 310px) minmax(0, 1fr); gap: 1rem; } .controls { padding: 1.25rem; } .control { padding: 1rem 0; border-bottom: 1px solid #28384a; } .control:last-child { border-bottom: 0; padding-bottom: 0; } .control label { display: flex; justify-content: space-between; font-size: .92rem; font-weight: 700; } .control output { color: #71e0d2; font-variant-numeric: tabular-nums; } input[type=range] { width: 100%; accent-color: #71e0d2; margin-top: .7rem; } .range-labels { color: #8495a8; display: flex; justify-content: space-between; font-size: .7rem; margin-top: .15rem; }
     .run-config { display: grid; gap: .75rem; margin-top: 1rem; } .run-config label { color: #b9c8d9; display: grid; font-size: .83rem; font-weight: 700; gap: .35rem; } select, input[type=number] { background: #0c141e; border: 1px solid #3a4e64; border-radius: 8px; color: #eaf0f8; font: inherit; padding: .55rem .6rem; width: 100%; }
     .actions { display: grid; gap: .65rem; margin-top: 1.1rem; } .actions button { border: 1px solid #3f596c; border-radius: 9px; cursor: pointer; font-weight: 750; padding: .75rem .8rem; } #run-button { background: #71e0d2; color: #08211f; } #clear-button { background: #182534; color: #cfdae5; } #run-button:disabled { cursor: wait; opacity: .6; } .action-note { color: #8fa1b4; font-size: .74rem; line-height: 1.45; margin: 0; }
+    .toggle-control { display: flex; align-items: center; justify-content: space-between; padding: .75rem 0 .2rem; border-top: 1px solid #28384a; margin-top: .75rem; }
+    .toggle-label { display: flex; flex-direction: column; gap: .2rem; }
+    .toggle-label strong { font-size: .83rem; font-weight: 700; color: #eaf0f8; }
+    .toggle-label small { font-size: .72rem; color: #8fa1b4; }
+    .switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #1a2636; transition: .25s ease; border-radius: 24px; border: 1px solid #3a4e64; }
+    .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: #8ea1b5; transition: .25s ease; border-radius: 50%; }
+    input:checked + .slider { background-color: #ff6e93; border-color: #ff6e93; }
+    input:checked + .slider:before { transform: translateX(20px); background-color: #1a080f; }
     .visual { padding: 1.25rem; min-width: 0; } .topline { align-items: center; display: flex; justify-content: space-between; gap: 1rem; } #status { color: #a8bacd; font-size: .85rem; text-align: right; } #status.error { color: #ff9c89; }
     .metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; margin: 1rem 0; } .metric { padding: .9rem; background: #0c141e; border: 1px solid #26384a; border-radius: 12px; } .metric span { color: #98a9ba; display: block; font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; } .metric strong { display: block; font-size: clamp(1.1rem, 2.5vw, 1.75rem); margin-top: .3rem; white-space: nowrap; } #risk { color: #71e0d2; } #risk.warning { color: #ffce74; } #risk.critical { color: #ff8b70; }
     .chart-heading { align-items: baseline; display: flex; gap: .75rem; justify-content: space-between; margin: 1.25rem 0 .55rem; } .chart-heading h3 { font-size: .88rem; margin: 0; } .chart-heading span { color: #8495a8; font-size: .75rem; }
@@ -42,6 +52,16 @@
           <label for="scenario">Task 1 operating mode<select id="scenario"><option value="safe">Safe control — no upset</option><option value="random">Random Task 1 upset (75% chance)</option><option value="coolant_pump_failure">Coolant pump failure</option><option value="jacket_loss">Jacket loss</option><option value="feed_surge">Feed surge</option><option value="overheating">Overheating</option></select></label>
           <label for="duration">Simulation duration (minutes)<input id="duration" type="number" min="1" max="120" step="1" value="40"></label>
         </div>
+        <div class="toggle-control">
+          <div class="toggle-label">
+            <strong>Simulate Sensor Noise</strong>
+            <small>Injects 5% Gaussian noise into temperature readings</small>
+          </div>
+          <label class="switch" for="noise-toggle" aria-label="Toggle 5% sensor noise">
+            <input type="checkbox" id="noise-toggle">
+            <span class="slider"></span>
+          </label>
+        </div>
         <div class="actions"><button id="run-button" type="button">Run CSTR simulation</button><button id="clear-button" type="button">Clear graph</button><p class="action-note">The run starts at t = 0 using the selected preset’s initial state and cooling regime.</p></div>
       </aside>
       <section class="card visual"><div class="topline"><h2 class="section-title">Dynamic reactor profile</h2><div id="status" aria-live="polite">Preparing simulation…</div></div>
@@ -62,8 +82,16 @@
     const runButton = document.querySelector("#run-button");
     const scenarioInput = document.querySelector("#scenario");
     const durationInput = document.querySelector("#duration");
+    const noiseToggle = document.querySelector("#noise-toggle");
     const physics = { volume: 100, k0: 7.2e10, eOverR: 8750, heatRelease: 50, rhoCp: 1000, cutoff: 380, step: .2, integrationStep: .01, uaNominal: 50_000 };
     const taskOneScenarios = ["coolant_pump_failure", "jacket_loss", "feed_surge", "overheating"];
+
+    function boxMullerRandom(mean = 0, stdev = 1) {
+      let u = 0, v = 0;
+      while (u === 0) u = Math.random();
+      while (v === 0) v = Math.random();
+      return (Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v)) * stdev + mean;
+    }
     const featureMeta = [
       { key: "q", label: "q · flow", color: "#65dce0", low: 80, high: 115, decimals: 1, unit: "L/min" },
       { key: "cAi", label: "cAi · inlet concentration", color: "#f9ce6b", low: .8, high: 2, decimals: 2, unit: "mol/L" },
@@ -175,15 +203,32 @@
         const time = simulationState.step * physics.step;
         const phase = phaseFor(time, simulationState);
         const derivatives = cstrRhs(simulationState.cA, simulationState.T, phase.inputs, phase.coolingUA);
-        simulationRecords.push({ time, ...phase.inputs, cA: simulationState.cA, T: simulationState.T, dT_dt: derivatives.dT });
+
+        // Inject 5% Gaussian sensor noise into temperature traces when toggle is ON
+        let recordT = simulationState.T;
+        let recordTc = phase.inputs.Tc;
+        if (noiseToggle && noiseToggle.checked) {
+          recordT += boxMullerRandom(0, 0.05 * simulationState.T);
+          recordTc += boxMullerRandom(0, 0.05 * phase.inputs.Tc);
+        }
+
+        simulationRecords.push({
+          time,
+          ...phase.inputs,
+          Tc: recordTc,
+          cA: simulationState.cA,
+          T: recordT,
+          dT_dt: derivatives.dT,
+        });
         const forecast = await inferRemainingSafeTime(simulationRecords);
         if (!isRunning || sequence !== runSequence) return;
         safeTimeForecasts.push(forecast);
         renderResults();
 
         const latest = simulationRecords.at(-1);
-        if (latest.T >= physics.cutoff) {
-          finishSimulation(`Safety cutoff reached at t = ${latest.time.toFixed(1)} min.`);
+        // Terminate when reactor physically hits safety cutoff
+        if (simulationState.T >= physics.cutoff) {
+          finishSimulation(`Safety cutoff reached (Reactor T = ${simulationState.T.toFixed(1)} K) at t = ${latest.time.toFixed(1)} min.`);
           return;
         }
         if (simulationState.step >= simulationState.maxStepIndex) {
@@ -233,7 +278,16 @@
       document.querySelector("#remaining-time").textContent = forecast === null ? "Collecting history" : `${forecast.toFixed(2)} min`;
 
       const risk = document.querySelector("#risk");
-      const riskInfo = latest.T >= physics.cutoff ? ["Cutoff exceeded", "critical"] : latest.T >= 370 ? ["Warning", "warning"] : ["Stable", ""];
+      let riskInfo;
+      if (simulationState && simulationState.T >= physics.cutoff) {
+        riskInfo = ["Cutoff exceeded", "critical"];
+      } else if (latest.T >= physics.cutoff) {
+        riskInfo = ["Sensor Trip Alarm (Noise Spike)", "critical"];
+      } else if (latest.T >= 370) {
+        riskInfo = ["Warning", "warning"];
+      } else {
+        riskInfo = ["Stable", ""];
+      }
       risk.textContent = riskInfo[0];
       risk.className = riskInfo[1];
 
@@ -350,6 +404,15 @@
         }));
         runButton.addEventListener("click", startSimulation);
         document.querySelector("#clear-button").addEventListener("click", () => clearSimulation());
+        if (noiseToggle) {
+          noiseToggle.addEventListener("change", () => {
+            if (noiseToggle.checked) {
+              setStatus("Sensor Noise enabled (5% Gaussian). Real-time charts and LSTM will reflect noisy sensor readings.");
+            } else {
+              setStatus("Sensor Noise disabled. Clean process signals restored.");
+            }
+          });
+        }
         window.addEventListener("resize", () => simulationRecords.length ? drawProcessChart(simulationRecords, safeTimeForecasts) : drawEmptyChart());
         clearSimulation("Ready. Choose inputs, then run the simulation.");
       } catch (error) {
