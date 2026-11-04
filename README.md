@@ -13,7 +13,8 @@ The reactor is governed by an Arrhenius reaction term and a thermal energy balan
 - generate realistic transient reactor trajectories,
 - identify when a trajectory is approaching a critical cutoff,
 - estimate the remaining time to runaway,
-- evaluate model quality using safety and prognostic metrics.
+- evaluate model quality using safety and prognostic metrics,
+- analyse sensor noise robustness and demonstrate the necessity of a signal filtering pipeline.
 
 ## Repository structure
 
@@ -28,12 +29,19 @@ The reactor is governed by an Arrhenius reaction term and a thermal energy balan
 │   ├── 01_input_distributions.png
 │   ├── 02_correlation_heatmap.png
 │   ├── 03_safety_analysis.png
+│   ├── 04_noise_robustness.png
 │   └── cstr_plots.png
 ├── scripts/
 │   ├── task_1.py
 │   ├── task_2.py
 │   ├── task_3.py
+│   ├── task_4_noise_robustness.py
 │   └── cstr_runaway_trajectories.csv
+├── huggingface_static_space/
+│   ├── index.html          ← updated: Sensor Noise toggle
+│   ├── model.onnx
+│   ├── scaler.json
+│   └── default_profiles.json
 ```
 
 ## Data and reactor model
@@ -125,6 +133,29 @@ Example (run from the directory containing the generated CSV, or update the scri
 python scripts/task_3.py
 ```
 
+### 4) `scripts/task_4_noise_robustness.py`
+
+This script demonstrates the necessity of a signal filtering pipeline by analysing the impact of sensor noise on CSTR temperature monitoring.
+
+What it does:
+
+- loads a sample runaway trajectory from `scripts/cstr_runaway_trajectories.csv`,
+- selects the first runaway run as a representative case,
+- injects 5% Gaussian noise (`Normal(0, 0.05 × T)`) into the reactor temperature `T` and coolant temperature `Tc` columns,
+- applies a simple rolling-window moving average filter to show signal reconstruction,
+- counts premature false trip alarms caused by raw noise crossing the 380 K safety threshold before the reactor is physically unsafe,
+- saves a comparison plot of clean vs. noisy vs. filtered temperature traces to `plots/04_noise_robustness.png`.
+
+Key finding: at a 5% noise level (σ ≈ 17.5 K at 350 K), raw sensor noise can generate false safety trip alarms several time-steps before an actual runaway, motivating pre-processing and filtering before LSTM inference.
+
+Example:
+
+```bash
+python scripts/task_4_noise_robustness.py
+```
+
+Output saved to `plots/04_noise_robustness.png`.
+
 ## Included datasets
 
 ### `dataset/cstr_21k_dataset_parallel.csv`
@@ -142,7 +173,8 @@ The `plots/` directory contains exploratory visuals such as:
 - input distributions,
 - feature correlation heatmaps,
 - safety analysis plots,
-- example trajectory evaluations.
+- example trajectory evaluations,
+- sensor noise robustness comparison (clean vs. noisy vs. filtered temperature traces).
 
 ## Environment setup
 
@@ -159,7 +191,12 @@ cd scripts
 python task_1.py
 python task_2.py
 python task_3.py
+python task_4_noise_robustness.py
 ```
+
+## Interactive frontend — Sensor Noise toggle
+
+The browser demo at `huggingface_static_space/index.html` now includes a **Simulate Sensor Noise** toggle switch in the Operating inputs panel. When enabled, the JavaScript simulation loop injects 5% Gaussian noise (using a Box-Muller transform for a physically realistic normal distribution) into the real-time `T` and `Tc` readings plotted on the chart. This visually demonstrates to users why a data curation and filtering pipeline is critical before feeding raw sensor signals into the LSTM. The physical state integrator continues to evolve using the true (noiseless) values so the simulation is not prematurely terminated by a measurement spike, and any noise-induced crossing of the 380 K threshold is flagged separately as a **Sensor Trip Alarm (Noise Spike)** in the status badge.
 
 ## Interpretation
 
@@ -170,4 +207,5 @@ This project is designed as a synthetic benchmark for predictive maintenance of 
 - The project uses synthetic data rather than real plant telemetry.
 - `task_2.py` is model-dependent and requires a trained LSTM checkpoint.
 - `task_3.py` can generate demo predictions if no `y_pred` column is present, which is helpful for testing the evaluation workflow.
+- `task_4_noise_robustness.py` reads `scripts/cstr_runaway_trajectories.csv` and writes the output plot to `plots/04_noise_robustness.png`. Run `task_1.py` first if the CSV does not exist.
 
